@@ -33,3 +33,5 @@ optional arguments:
                         File to log to (default = stdout)
   -V, --version         show program's version number and exit
 ```
+
+More info in my [blog] (http://jose-manuel.me/2014/02/vsphere-full-inventory-report-vsphere_inventory_report-py) 

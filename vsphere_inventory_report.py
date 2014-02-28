@@ -34,7 +34,7 @@ def write_report(vms_info, csvfile, dirname, c):
 def create_vm_dict():
     vm = {'vmId': None, 'vm': None, 'numCPU': None, 'MBmemory': None, 'vmConfig': None, 'Note': None, 'vmOS': None, 'vmDNS': None, 
           'vmPower': None, 'vmTools': None, 'cpuReservationMhz': None, 'cpuLimitMhz': None, 'memReservationMB': None, 'memLimitMB': None,
-          'diskCapacity': None, 'networks': None, 'datastores': None, 'netids': None, 'ipaddress': None, 'snapshots': None, 'CDdrive': None,
+          'diskCapacity': None, 'networks': None, 'datastores': None, 'netids': None, 'snapshots': None, 'CDdrive': None,
           'ESXihost': None, 'HardDisks': None, 'diskCapacity': None, 'Folder': None, 'Permissions': None} 
     return vm
     
@@ -50,7 +50,7 @@ def create_vm_props():
               'config.hardware.memoryMB', 'config.files.vmPathName',
               'runtime.host', 'config.version', 'summary.runtime.powerState',
               'config.annotation', 'config.guestFullName', 'guest.hostName',
-              'guest.toolsVersion', 'guest.ipAddress', 'guest.disk',
+              'guest.toolsVersion', 'guest.disk', 'guest.net',
               'resourceConfig.cpuAllocation.reservation',
               'resourceConfig.cpuAllocation.limit',
               'resourceConfig.memoryAllocation.reservation',
@@ -124,21 +124,21 @@ def set_filename(filename):
                 return 'vsphere-inventory'
 
 def get_args():
-	# Creating the argument parser
-	parser = argparse.ArgumentParser(description="Report full vShere inventory to a CSV file")
-	parser.add_argument('-s', '--server', nargs=1, required=True, help='The vCenter or ESXi server to connect to', dest='server', type=str)
-	parser.add_argument('-u', '--user', nargs=1, required=True, help='The username with which to connect to the server', dest='username', type=str)
-	parser.add_argument('-p', '--password', nargs=1, required=False, help='The password with which to connect to the host. If not specified, the user is prompted at runtime for a password', dest='password', type=str)
-	parser.add_argument('-c', '--dc', nargs=1, required=True, help='The datacenter name you wish to report', dest='dcname', type=str)
-	parser.add_argument('-D', '--dir', required=False, help='Write CSV to a specific directory. Default /tmp', dest='directory', type=str)
-	parser.add_argument('-f', '--filename', required=False, help='File name. Default vsphere-inventory.csv', dest='filename', type=str)
-	parser.add_argument('-v', '--verbose', required=False, help='Enable verbose output', dest='verbose', action='store_true')
-	parser.add_argument('-d', '--debug', required=False, help='Enable debug output', dest='debug', action='store_true')
-	parser.add_argument('-l', '--log-file', nargs=1, required=False, help='File to log to (default = stdout)', dest='logfile', type=str)
-	parser.add_argument('-V', '--version', action='version', version="%(prog)s (version 0.2)")
+    # Creating the argument parser
+    parser = argparse.ArgumentParser(description="Report full vShere inventory to a CSV file")
+    parser.add_argument('-s', '--server', nargs=1, required=True, help='The vCenter or ESXi server to connect to', dest='server', type=str)
+    parser.add_argument('-u', '--user', nargs=1, required=True, help='The username with which to connect to the server', dest='username', type=str)
+    parser.add_argument('-p', '--password', nargs=1, required=False, help='The password with which to connect to the host. If not specified, the user is prompted at runtime for a password', dest='password', type=str)
+    parser.add_argument('-c', '--dc', nargs=1, required=True, help='The datacenter name you wish to report', dest='dcname', type=str)
+    parser.add_argument('-D', '--dir', required=False, help='Write CSV to a specific directory. Default /tmp', dest='directory', type=str)
+    parser.add_argument('-f', '--filename', required=False, help='File name. Default vsphere-inventory.csv', dest='filename', type=str)
+    parser.add_argument('-v', '--verbose', required=False, help='Enable verbose output', dest='verbose', action='store_true')
+    parser.add_argument('-d', '--debug', required=False, help='Enable debug output', dest='debug', action='store_true')
+    parser.add_argument('-l', '--log-file', nargs=1, required=False, help='File to log to (default = stdout)', dest='logfile', type=str)
+    parser.add_argument('-V', '--version', action='version', version="%(prog)s (version 0.2)")
 
-	args = parser.parse_args()
-	return args
+    args = parser.parse_args()
+    return args
 
 def get_vms_dict(server, properties, paths, hosts_dict, datastores_dict, dvpgs):
     vms_info = {}
@@ -177,17 +177,21 @@ def get_vms_dict(server, properties, paths, hosts_dict, datastores_dict, dvpgs):
                 vm['memReservationMB'] = p.Val
             elif p.Name == "resourceConfig.memoryAllocation.limit":
                 vm['memLimitMB'] = p.Val
+            elif p.Name == "guest.net":
+                netids = {}
+                for nic in getattr(p.Val, "GuestNicInfo", []):
+                    netids[getattr(nic,  'MacAddress', None)] = getattr(nic, 'IpAddress', None)
+                vm['netids'] = netids
             elif p.Name == "config.hardware.device":
                 cdroms = []
-                macs = []
+                # macs = []
                 nets = {}
                 for data in p.Val.VirtualDevice:
                     if data.typecode.type[1] == "VirtualCdrom" and data.Connectable.Connected:
                         cdroms.append(data.DeviceInfo.Summary)
                     elif data.typecode.type[1] in ["VirtualE1000", "VirtualE1000e", "VirtualPCNet32", "VirtualVmxnet", "VirtualVmxnet3", "VirtualVmxnet2"]:
                         # NetIDs
-                        macs.append(getattr(data, "MacAddress", 'NA'))
-                        
+                        # macs.append(getattr(data, "MacAddress", 'NA'))
                         # Getting DV switch vs NIcs
                         niclabel = data.DeviceInfo.Label
                         port = None
@@ -198,8 +202,10 @@ def get_vms_dict(server, properties, paths, hosts_dict, datastores_dict, dvpgs):
                         else: 
                             nets [niclabel] = 'NA'
                 vm['CDdrive'] = cdroms
-                vm['netids'] = macs
                 vm['networks'] = nets
+                # already populated
+                # if vm['netids'] is None:
+                # vm['netids']= macs
             elif p.Name == "guest.disk":
                  hddsum = 0
                  for data in getattr(p.Val, "GuestDiskInfo", []):
@@ -210,8 +216,6 @@ def get_vms_dict(server, properties, paths, hosts_dict, datastores_dict, dvpgs):
                 for data in getattr(p.Val, "_ManagedObjectReference"):
                     datastores.append([v for k, v in datastores_dict if k == data])
                 vm["datastores"] = datastores
-            elif p.Name =="guest.ipAddress":
-                vm['ipaddress'] = p.Val
             elif p.Name == "snapshot":
                 snapshots = []
                 for data in getattr(p.Val, "_rootSnapshotList"):
@@ -248,36 +252,36 @@ def get_vms_dict(server, properties, paths, hosts_dict, datastores_dict, dvpgs):
 # Parsing values
 args = get_args()
 argsdict = vars(args)
-servervctr 	= args.server[0]
-username 	= args.username[0]
-dcname	 	= args.dcname[0]
-verbose		= args.verbose
-debug		= args.debug
-log_file	= None
-password 	= None
+servervctr  = args.server[0]
+username    = args.username[0]
+dcname      = args.dcname[0]
+verbose     = args.verbose
+debug       = args.debug
+log_file    = None
+password    = None
 directory   = args.directory
 filename    = args.filename
 
 if args.password:
-	password = args.password[0]
+    password = args.password[0]
 
 if args.logfile:
         log_file = args.logfile[0]
 
 # Logging settings
 if debug:
-	log_level = logging.DEBUG
+    log_level = logging.DEBUG
 elif verbose:
-	log_level = logging.INFO
+    log_level = logging.INFO
 else:
-	log_level = logging.WARNING
-	
+    log_level = logging.WARNING
+    
 # Initializing logger
 if log_file:
-	logging.basicConfig(filename=log_file,format='%(asctime)s %(levelname)s %(message)s',level=log_level)
+    logging.basicConfig(filename=log_file,format='%(asctime)s %(levelname)s %(message)s',level=log_level)
 else:
-	logging.basicConfig(filename=log_file,format='%(asctime)s %(levelname)s %(message)s',level=log_level)
-	logger = logging.getLogger(__name__)
+    logging.basicConfig(filename=log_file,format='%(asctime)s %(levelname)s %(message)s',level=log_level)
+    logger = logging.getLogger(__name__)
 logger.debug('logger initialized')
 
 # CSV configuration
@@ -297,7 +301,7 @@ except IOException as inst:
 
 # Asking Users password for server
 if password is None:
-	logger.debug('No command line password received, requesting password from user')
+    logger.debug('No command line password received, requesting password from user')
         password = getpass.getpass(prompt='Enter password for vCenter %s for user %s: ' % (servervctr,username))
 
 # Connecting to server
@@ -305,16 +309,16 @@ logger.info('Connecting to server %s with username %s' % (servervctr,username))
 
 server = VIServer()
 try:
-	logger.debug('Trying to connect with provided credentials')
-	server.connect(servervctr,username,password)
-	logger.info('Connected to server %s' % servervctr)
-	logger.debug('Server type: %s' % server.get_server_type())
-	logger.debug('API version: %s' % server.get_api_version())
+    logger.debug('Trying to connect with provided credentials')
+    server.connect(servervctr,username,password)
+    logger.info('Connected to server %s' % servervctr)
+    logger.debug('Server type: %s' % server.get_server_type())
+    logger.debug('API version: %s' % server.get_api_version())
 except VIException as ins:
-	logger.error(ins)
-	logger.debug('Loggin error. Program will exit now.')
-	sys.exit()
-	
+    logger.error(ins)
+    logger.debug('Loggin error. Program will exit now.')
+    sys.exit()
+    
 if dcname is None:
     logger.error('No datacenter name. Progam will exit now.')
     sys.exit()
@@ -352,8 +356,7 @@ try:
     
     paths = get_paths_dict(server, properties2)
     logger.debug('VM Paths dictionary generated with size %d' % (len(paths)))
-    logger.info('Pre-required dictionaries were successfully gotten: Hosts (%s), Datastores (%s), Datacenters(%s), DVPG(%s) and VM Paths(%s)' %(len(hosts_dict), len(datastores_dict), len(datacenters), len(dvpgs), len(paths))
-)
+    logger.info('Pre-required dictionaries were successfully gotten: Hosts (%s), Datastores (%s), Datacenters(%s), DVPG(%s) and VM Paths(%s)' %(len(hosts_dict), len(datastores_dict), len(datacenters), len(dvpgs), len(paths)))
     
     logger.info('Building main Virtual Machine properties dictionary. This might take a few minutes.')
     vms_info = get_vms_dict(server, properties, paths, hosts_dict, datastores_dict, dvpgs)

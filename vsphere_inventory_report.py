@@ -164,7 +164,9 @@ def get_vms_dict(server, properties, paths, hosts_dict, datastores_dict, dvpgs):
             elif p.Name == "config.files.vmPathName":
                 vm['vmConfig'] = p.Val
             elif p.Name == "config.annotation":
-                vm['Note']= p.Val
+                annotation = str(p.Val)
+                annotation = annotation.replace('\n',' ')
+                vm['Note']= annotation
             elif p.Name == "config.guestFullName":
                 vm['vmOS'] = p.Val
             elif p.Name == "guest.hostName":

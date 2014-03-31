@@ -1,5 +1,5 @@
 #!/usr/bin/python
-import logging, sys, re, getpass, argparse, pprint, csv
+import logging, sys, re, getpass, argparse, pprint, csv, time
 from pysphere import MORTypes, VIServer, VITask, VIProperty, VIMor, VIException
 from pysphere.vi_virtual_machine import VIVirtualMachine
 from pysphere.resources import VimService_services as VI
@@ -116,12 +116,16 @@ def set_dir(directory):
         else:
                 logger.info('Using default directory /tmp')
                 return '/tmp'
+
+def getDateSuffix():
+  return '_'+time.strftime("%Y-%m-%d")
+
 def set_filename(filename):
         if filename:
-                return filename
+                return filename + getDateSuffix()
         else:
                 logger.info('Using default filename vsphere-inventory')
-                return 'vsphere-inventory'
+                return 'vsphere-inventory' + getDateSuffix()
 
 def get_args():
 	# Creating the argument parser
@@ -283,7 +287,9 @@ else:
 	
 # Initializing logger
 if log_file:
-	logging.basicConfig(filename=log_file,format='%(asctime)s %(levelname)s %(message)s',level=log_level)
+    logfile = log_file + getDateSuffix() + '.log' 
+    logging.basicConfig(filename=logfile,format='%(asctime)s %(levelname)s %(message)s',level=log_level)
+    logger = logging.getLogger(__name__)
 else:
 	logging.basicConfig(filename=log_file,format='%(asctime)s %(levelname)s %(message)s',level=log_level)
 	logger = logging.getLogger(__name__)

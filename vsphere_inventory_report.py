@@ -26,7 +26,7 @@ def get_vm_permissions(auth_manager, vm_mor, request):
 def write_report(vms_info, csvfile, dirname, c):
     
     for val in vms_info.values():
-        c.writerow([val['Folder'], val['vm'], val['numCPU'], val['MBmemory'], val['diskCapacity'], val['diskCommitted'],val['ESXihost'], val['datastores'], 
+        c.writerow([val['Folder'], val['vm'], val['numCPU'], val['MBmemory'], val['storageUsed'], val['storageCommitted'],val['ESXihost'], val['datastores'], 
                     val['vmConfig'], val['networks'], val['netids'], val['vmOS'], val['vmTools'], val['vmPower'], val['vmDNS'], val['Note'],
                     val['cpuReservationMhz'], val['cpuLimitMhz'], val['memReservationMB'], val['memLimitMB'], val['HardDisks'],
                     val['CDdrive'], val['snapshots'], val['Permissions'] ])
@@ -34,8 +34,8 @@ def write_report(vms_info, csvfile, dirname, c):
 def create_vm_dict():
     vm = {'vmId': None, 'vm': None, 'numCPU': None, 'MBmemory': None, 'vmConfig': None, 'Note': None, 'vmOS': None, 'vmDNS': None, 
           'vmPower': None, 'vmTools': None, 'cpuReservationMhz': None, 'cpuLimitMhz': None, 'memReservationMB': None, 'memLimitMB': None,
-          'diskCapacity': None, 'networks': None, 'datastores': None, 'netids': None, 'snapshots': None, 'CDdrive': None,
-          'ESXihost': None, 'HardDisks': None, 'diskCapacity': None, 'diskCommitted': None, 'Folder': None, 'Permissions': None} 
+          'networks': None, 'datastores': None, 'netids': None, 'snapshots': None, 'CDdrive': None,
+          'ESXihost': None, 'HardDisks': None, 'storageUsed': None, 'storageCommitted': None, 'Folder': None, 'Permissions': None} 
     return vm
     
 def create_csv_header():
@@ -139,7 +139,7 @@ def get_args():
 	parser.add_argument('-v', '--verbose', required=False, help='Enable verbose output', dest='verbose', action='store_true')
 	parser.add_argument('-d', '--debug', required=False, help='Enable debug output', dest='debug', action='store_true')
 	parser.add_argument('-l', '--log-file', nargs=1, required=False, help='File to log to (default = stdout)', dest='logfile', type=str)
-	parser.add_argument('-V', '--version', action='version', version="%(prog)s (version 0.2)")
+	parser.add_argument('-V', '--version', action='version', version="%(prog)s (version 0.4)")
 
 	args = parser.parse_args()
 	return args
@@ -212,21 +212,27 @@ def get_vms_dict(server, properties, paths, hosts_dict, datastores_dict, dvpgs):
                 # already populated
                 # if vm['netids'] is None:
                 # vm['netids']= macs
-            elif p.Name == "guest.disk":
-                 hddsum = 0
-                 for data in getattr(p.Val, "GuestDiskInfo", []):
-                     hddsum +=  int(getattr(data , "Capacity", 0))
-                 vm['diskCapacity'] = sizeof_fmt(hddsum)
+ #           elif p.Name == "guest.disk":
+ #                hddsum = 0
+ #                for data in getattr(p.Val, "GuestDiskInfo", []):
+ #                    hddsum +=  int(getattr(data , "Capacity", 0))
+ #                vm['diskCapacity'] = sizeof_fmt(hddsum)
             elif p.Name == "datastore":
                 datastores = []
                 for data in getattr(p.Val, "_ManagedObjectReference"):
                     datastores.append([v for k, v in datastores_dict if k == data])
                 vm["datastores"] = datastores
             elif p.Name == "storage.perDatastoreUsage":
+                usedStorage = 0
                 committed = 0
+                uncommitted = 0
+                unshared = 0 
                 for data in getattr(p.Val, "VirtualMachineUsageOnDatastore", []):
                     committed += getattr(data , "Committed", 0)
-                vm['diskCommitted'] = sizeof_fmt(committed)
+                    uncommitted += getattr(data , "Uncommitted", 0)
+                    unshared += getattr(data, "Unshared", 0)
+                vm['storageCommitted'] = sizeof_fmt(committed)
+                vm['storageUsed'] = sizeof_fmt(committed + uncommitted + unshared)
             elif p.Name == "snapshot":
                 snapshots = []
                 for data in getattr(p.Val, "_rootSnapshotList"):
